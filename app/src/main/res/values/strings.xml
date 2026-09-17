@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">bluebro</string>
+    <string name="associate_device">Set up automatic Auracast</string>
+    <string name="status_not_associated">No companion device set up yet. This is a one-time setup — after it, Auracast starts and stops on its own whenever the companion device comes and goes, with no screen needed on either device.</string>
+    <string name="status_permission_denied">Bluetooth permission is required to find the companion device.</string>
+    <string name="status_watching">Set up. Auracast will now start automatically whenever %1$s is nearby — no further action needed here.</string>
+    <string name="status_already_watching">Already set up (association #%1$d) — Auracast runs automatically in the background.</string>
+    <string name="status_association_failed">Association failed: %1$s</string>
+    <string name="live_status_label">Right now</string>
+    <string name="live_status_unknown">Waiting for setup to finish.</string>
+    <string name="live_status_nearby">Companion device is nearby — Auracast is broadcasting.</string>
+    <string name="live_status_away">Companion device is not in range — Auracast is off.</string>
+</resources>
