@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">bluebro</string>
+    <string name="associate_device">Associate Device A</string>
+    <string name="status_not_associated">No companion device associated yet.</string>
+    <string name="status_permission_denied">Bluetooth permission is required to find Device A.</string>
+    <string name="status_watching">Watching %1$s for presence.</string>
+    <string name="status_already_watching">Already watching association #%1$d for presence.</string>
+    <string name="status_association_failed">Association failed: %1$s</string>
+</resources>
