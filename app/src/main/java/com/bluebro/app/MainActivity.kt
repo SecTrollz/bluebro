@@ -1,9 +1,11 @@
 package com.bluebro.app
 
 import android.Manifest
+import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
+import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -99,8 +101,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startAssociation() {
+        // No name/address/service constraints on either filter, and BLE-only
+        // devices are included alongside classic-pairable ones (OR'd
+        // together) -- the companion device just needs Bluetooth turned on
+        // and to be in range, nothing installed or pre-paired.
         val request = AssociationRequest.Builder()
             .addDeviceFilter(BluetoothDeviceFilter.Builder().build())
+            .addDeviceFilter(BluetoothLeDeviceFilter.Builder().setScanFilter(ScanFilter.Builder().build()).build())
             .setSingleDevice(false)
             .build()
 

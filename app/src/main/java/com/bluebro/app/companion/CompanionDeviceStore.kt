@@ -3,9 +3,9 @@ package com.bluebro.app.companion
 import android.content.Context
 
 /**
- * Persists the [android.companion.AssociationInfo] id for "Device A" so the
- * (separate-process) [CompanionPresenceService] can tell its presence events
- * apart from those of any other companion association.
+ * Persists the [android.companion.AssociationInfo] id for the companion
+ * device so [CompanionPresenceService] can tell its presence events apart
+ * from those of any other companion association.
  */
 object CompanionDeviceStore {
 
