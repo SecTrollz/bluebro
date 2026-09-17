@@ -8,6 +8,7 @@ import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -25,16 +26,22 @@ import rikka.shizuku.Shizuku
 class MainActivity : AppCompatActivity() {
 
     private lateinit var companionDeviceManager: CompanionDeviceManager
-    private lateinit var statusText: TextView
+    private lateinit var setupStatusText: TextView
+    private lateinit var liveStatusText: TextView
 
     private val requestBluetoothPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 startAssociation()
             } else {
-                statusText.text = getString(R.string.status_permission_denied)
+                setupStatusText.text = getString(R.string.status_permission_denied)
             }
         }
+
+    /** Reflects presence updates from [com.bluebro.app.companion.CompanionPresenceService]
+     * while this screen happens to be open — it plays no part in making them happen. */
+    private val presenceListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refreshLiveStatus() }
 
     /**
      * One-time setup only: after this completes, presence detection and
@@ -60,7 +67,8 @@ class MainActivity : AppCompatActivity() {
 
         companionDeviceManager =
             getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
-        statusText = findViewById(R.id.statusText)
+        setupStatusText = findViewById(R.id.setupStatusText)
+        liveStatusText = findViewById(R.id.liveStatusText)
         findViewById<Button>(R.id.associateButton).setOnClickListener {
             setUpAutomaticAuracast()
         }
@@ -70,13 +78,32 @@ class MainActivity : AppCompatActivity() {
 
         val existingAssociationId = CompanionDeviceStore.getAssociationId(this)
         if (existingAssociationId != CompanionDeviceStore.NO_ASSOCIATION) {
-            statusText.text = getString(R.string.status_already_watching, existingAssociationId)
+            setupStatusText.text = getString(R.string.status_already_watching, existingAssociationId)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        CompanionDeviceStore.addChangeListener(this, presenceListener)
+        refreshLiveStatus()
+    }
+
+    override fun onPause() {
+        CompanionDeviceStore.removeChangeListener(this, presenceListener)
+        super.onPause()
     }
 
     override fun onDestroy() {
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
         super.onDestroy()
+    }
+
+    private fun refreshLiveStatus() {
+        liveStatusText.text = when (CompanionDeviceStore.isCompanionNearby(this)) {
+            true -> getString(R.string.live_status_nearby)
+            false -> getString(R.string.live_status_away)
+            null -> getString(R.string.live_status_unknown)
+        }
     }
 
     private fun requestShizukuPermissionIfNeeded() {
@@ -129,12 +156,12 @@ class MainActivity : AppCompatActivity() {
                     // the broadcast toggle never needs a screen on this device again.
                     requestShizukuPermissionIfNeeded()
 
-                    statusText.text = getString(R.string.status_watching, association.displayName)
+                    setupStatusText.text = getString(R.string.status_watching, association.displayName)
                 }
 
                 override fun onFailure(error: CharSequence?) {
                     Log.e(TAG, "Association failed: $error")
-                    statusText.text = getString(R.string.status_association_failed, error)
+                    setupStatusText.text = getString(R.string.status_association_failed, error)
                 }
             },
             Handler(Looper.getMainLooper()),

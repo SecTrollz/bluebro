@@ -26,11 +26,13 @@ class CompanionPresenceService : CompanionDeviceService() {
         when (event.event) {
             DevicePresenceEvent.EVENT_BLE_APPEARED -> {
                 Log.d(TAG, "Companion device appeared (association #${event.associationId})")
+                CompanionDeviceStore.setCompanionNearby(this, true)
                 AuracastBroadcastController.startBroadcast(applicationContext)
             }
 
             DevicePresenceEvent.EVENT_BLE_DISAPPEARED -> {
                 Log.d(TAG, "Companion device disappeared (association #${event.associationId})")
+                CompanionDeviceStore.setCompanionNearby(this, false)
                 AuracastBroadcastController.stopBroadcast(applicationContext)
             }
 
