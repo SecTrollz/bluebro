@@ -4,7 +4,6 @@ import android.Manifest
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
-import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
@@ -128,12 +127,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startAssociation() {
-        // No name/address/service constraints on either filter, and BLE-only
-        // devices are included alongside classic-pairable ones (OR'd
-        // together) -- the companion device just needs Bluetooth turned on
-        // and to be in range, nothing installed or pre-paired.
+        // BLE-only filter, deliberately: CompanionDeviceManager.associate()
+        // never bonds a device on its own -- that only happens if the app
+        // explicitly calls BluetoothDevice#createBond(), which this code
+        // never does -- but the classic BluetoothDeviceFilter can fold a
+        // system "pair" confirmation into the same picker gesture for some
+        // device categories. An empty ScanFilter matches any BLE-advertising
+        // device with no name/address/service constraints, so the companion
+        // device just needs Bluetooth on and to be in range: no pairing, no
+        // PIN, nothing pre-paired.
         val request = AssociationRequest.Builder()
-            .addDeviceFilter(BluetoothDeviceFilter.Builder().build())
             .addDeviceFilter(BluetoothLeDeviceFilter.Builder().setScanFilter(ScanFilter.Builder().build()).build())
             .setSingleDevice(false)
             .build()
