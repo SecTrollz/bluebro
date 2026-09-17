@@ -82,7 +82,100 @@ code, so Auracast's security model is closer to "shared secret for a radio
 station" than to classic Bluetooth's link security — worth being explicit
 about in any design that assumes confidentiality.
 
-## 4. Platform / implementation landscape (as of 2026)
+## 4. Security research: the broadcast model *is* the attack surface
+
+This is the sharpest edge case in the spec, and it's not theoretical —
+it's been demonstrated end-to-end by security researchers (ERNW/Insinuator,
+presented at 38C3 as "Auracast: Breaking Broadcast LE Audio Before It Hits
+the Shelves") with a public toolkit, plus several vendor CVEs. The root
+cause: Auracast is a **connectionless, receive-only broadcast** by design —
+a sink never talks back to a source at the link layer, so there is no
+mechanism for a sink to verify *who* is sending, only *whether* a PDU
+matches a key it already has.
+
+### 4.1 Unencrypted broadcasts: no authenticity, period
+
+With no Broadcast_Code, any PDU that fits the format and matching stream
+parameters is accepted — a sink can't distinguish the real source from an
+attacker with a stronger signal. The 2023 **BISON** paper demonstrated
+hijacking an unencrypted broadcast by injecting forged control PDUs
+(channel-map updates) that redirect a synced receiver mid-stream to
+attacker-controlled audio, with no user-visible warning.
+
+### 4.2 Encrypted broadcasts: "perimeter" auth only, and the perimeter is thin
+
+Encryption doesn't fix the authenticity gap — it just moves it. Anyone
+holding the Broadcast_Code can produce validly-encrypted PDUs, so
+possession of the code is treated as identity ("perimeter authentication"),
+not proof of being the original source. Worse, the code itself is often
+weak in practice:
+
+- The Group Session Key is derived from the Broadcast_Code via nested
+  **AES-CMAC** (functions h6/h7/h8) — a good PRF, but explicitly *not* a
+  key-stretching function (no iteration/cost factor like PBKDF2/Argon2).
+  Short or guessable codes are therefore crackable **offline**, with no
+  interaction with — or detection by — the source or sink.
+- An attacker only needs **one captured BIS PDU + the BIGInfo packet**
+  (broadcast in the clear as part of periodic advertising) to start
+  cracking. Researchers' `biscrack` tool did ~10s/entry against
+  `rockyou.txt` on a laptop for dictionary-style codes, and official SIG
+  example material itself used weak codes like `"12345"` or
+  `"PinotNoir"`.
+- **No forward secrecy**: PDUs can be captured and stored now, and
+  decrypted retroactively once the code is cracked later.
+- Real-world defaults made this trivial rather than theoretical:
+  - **CVE-2025-20908** — Samsung Galaxy S23/S24 + Galaxy Buds generated the
+    default Broadcast_Code from `UUID.randomUUID().toString().substring(0, 4)`
+    — 2 random bytes (16 bits) of entropy. `biscrack -m numeric -l 2`
+    cracked it in **under one second**. (Samsung's fix adopted AOSP's
+    approach: 12 hex chars / 6 bytes / 48 bits.)
+  - **CVE-2025-32330** — Android's own `generateRandomPassword` in
+    `LocalBluetoothLeBroadcast.java` used an insecure default, letting a
+    proximal attacker intercept broadcast audio with zero user interaction
+    (fixed in the September 2025 Android Security Bulletin).
+  - **CVE-2025-21002** — improper access control (CWE-284) in Samsung's
+    `LeAudioService` let a co-resident local app tamper with a device's
+    Auracast broadcast session/parameters without authorization.
+
+### 4.3 Availability: the hopping sequence is public too
+
+The frequency-hopping sequence that's supposed to give Bluetooth its
+jamming resilience is transmitted **in plaintext** inside BIGInfo, even for
+encrypted broadcasts. That enables selective/efficient jamming, and the
+same research describes a lightweight DoS ("BISQuit") that disconnects
+encrypted-broadcast receivers using only a handful of crafted PDUs — no
+brute force required.
+
+### 4.4 Tooling used by researchers
+
+The published **Auracast Hacker's Toolkit** (Zephyr-based, built for the
+Nordic nRF52840 USB dongle) implements passive sniffing, `biscrack`
+(Broadcast_Code cracking), active BIS hijacking (BISON), the BISQuit DoS,
+and broadcast cloning — i.e. the full kill chain from "sniff a stream" to
+"replace it with your own," end to end, on ~$10 hardware.
+
+### 4.5 Why this matters for any design here
+
+This isn't a one-off bug, it's structural: Auracast trades connection
+overhead for a security model with no sender authentication at the
+protocol level, and vendors have repeatedly shipped weak
+Broadcast_Code generation on top of that. Anything built in this repo
+that touches Auracast should treat that as a given rather than an
+implementation detail to patch later:
+
+- A **scanner/assistant** only reads public announcement data — low risk,
+  but should not assume a discovered stream's claimed identity (program
+  info, source name) is trustworthy, since it's attacker-controllable.
+- A **transmitter** should default to a properly random, full-length
+  (16-byte) Broadcast_Code when encryption is requested, and should not
+  reuse the weak "short numeric/dictionary code" patterns the spec's own
+  examples model.
+- A **receiver/sink** is the most exposed role (accepts and plays whatever
+  matches the code/params) — any implementation here is itself a subject
+  for the same hijacking/jamming testing described above before being
+  trusted.
+
+## 5. Platform / implementation landscape (as of 2026)
 
 - **Android** — Auracast support landed as of Android 16 (broadcast
   source/assistant UI, "Nearby streams" style discovery).
@@ -107,7 +200,7 @@ about in any design that assumes confidentiality.
   the most mature dedicated dev platform; NXP IW612 and ST STM32WBA also
   have LE Audio stacks.
 
-## 5. Implications for this repo
+## 6. Implications for this repo
 
 Given the above, "Auracast" isn't a single thing to implement — it's a
 choice of role(s) and platform. Before writing code, the project needs to
@@ -128,6 +221,13 @@ pick a lane; broad options and their trade-offs:
 4. **Documentation/spec-study only** — no code, just deeper spec work (e.g.
    BASE parsing reference, a from-scratch encoder for announcements) as
    prep for one of the above.
+5. **Security research / auditing tooling** (given §4) — e.g. a
+   Broadcast_Code-strength checker, a scanner that flags weak/default
+   codes on nearby broadcasts, or reproducing the published
+   sniff/crack/hijack chain against *own* hardware for defensive testing.
+   Highest research value, but scope and authorization boundaries (own
+   devices/lab only, no targeting third-party broadcasts) need to be
+   explicit before writing anything here.
 
 None of this is committed to yet — this file is the research baseline.
 Next step is deciding which of the above (or another direction) `bluebro`
@@ -145,3 +245,9 @@ should actually build toward.
 - [Implementing Bluetooth on embedded Linux: BlueZ vs proprietary stacks — Collabora](https://www.collabora.com/news-and-blog/blog/2025/02/27/implementing-bluetooth-on-embedded-linux-with-open-source-bluez-vs-proprietary-stacks/)
 - [Implementing Bluetooth LE Audio & Auracast on Linux systems — Collabora](https://www.collabora.com/news-and-blog/blog/2025/11/24/implementing-bluetooth-le-audio-and-auracast-on-linux-systems/)
 - [BlueZ-powered Auracast broadcasting on Genio 700 — Collabora](https://www.collabora.com/news-and-blog/blog/2026/05/05/bluez-powered-auracast-broadcasting-on-genio-700/)
+- [Part I: Bluetooth Auracast from a Security Researcher's Perspective — Insinuator.net](https://insinuator.net/2025/01/auracast-part1/)
+- [Auracast: Breaking Broadcast LE Audio Before It Hits the Shelves — 38C3 talk](https://media.ccc.de/v/38c3-auracast-breaking-broadcast-le-audio-before-it-hits-the-shelves)
+- [CVE-2025-20908: Use of insufficiently random values in Samsung's Auracast implementation — Insinuator.net](https://insinuator.net/2025/03/cve-2025-20908-use-of-insufficiently-random-values-in-samsungs-auracast-implementation/)
+- [CVE-2025-32330 — Wiz Vulnerability Database](https://www.wiz.io/vulnerability-database/cve/cve-2025-32330)
+- [CVE-2025-21002 — Wiz Vulnerability Database](https://www.wiz.io/vulnerability-database/cve/cve-2025-21002)
+- [auracast-research/auracast-hackers-toolkit — GitHub](https://github.com/auracast-research/auracast-hackers-toolkit)
