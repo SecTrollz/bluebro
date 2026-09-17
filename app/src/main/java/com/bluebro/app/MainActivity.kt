@@ -34,6 +34,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    /**
+     * One-time setup only: after this completes, presence detection and
+     * the Auracast toggle run entirely in the background via
+     * [com.bluebro.app.companion.CompanionPresenceService] — no further
+     * taps, screens, or notifications on this device.
+     */
+    private fun setUpAutomaticAuracast() {
+        requestBluetoothPermissionThenAssociate()
+    }
+
     private val shizukuPermissionListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
             if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
@@ -50,7 +60,7 @@ class MainActivity : AppCompatActivity() {
             getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
         statusText = findViewById(R.id.statusText)
         findViewById<Button>(R.id.associateButton).setOnClickListener {
-            requestBluetoothPermissionThenAssociate()
+            setUpAutomaticAuracast()
         }
 
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
@@ -107,6 +117,10 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         Log.w(TAG, "Association ${association.id} has no MAC address to observe")
                     }
+
+                    // Last step of setup: make sure Shizuku is granted too, so
+                    // the broadcast toggle never needs a screen on this device again.
+                    requestShizukuPermissionIfNeeded()
 
                     statusText.text = getString(R.string.status_watching, association.displayName)
                 }

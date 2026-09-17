@@ -10,9 +10,16 @@ import rikka.shizuku.Shizuku
 
 /**
  * Binds the Shizuku-privileged [AuracastBroadcastService] on demand and
- * forwards broadcast start/stop calls to it. No-ops (with a log warning)
- * if Shizuku isn't running or the user hasn't granted this app permission
- * yet — see [com.bluebro.app.MainActivity] for the permission request.
+ * forwards broadcast start/stop calls to it, with zero UI and no user
+ * interaction on the receiving device beyond the one-time Shizuku/Bluetooth
+ * grants handled in [com.bluebro.app.MainActivity].
+ *
+ * [CompanionPresenceService] can be cold-started by the system purely from
+ * a BLE presence event (e.g. right after a reboot, before the app's own UI
+ * has ever run in this process), in which case Shizuku's binder pairing may
+ * not have finished yet. Rather than dropping that first event, [dispatch]
+ * queues the call behind [Shizuku.addBinderReceivedListenerSticky] so it
+ * still runs — silently, in the background — the moment the binder is up.
  */
 object AuracastBroadcastController {
 
@@ -39,8 +46,24 @@ object AuracastBroadcastController {
     fun stopBroadcast(context: Context) = dispatch(context) { it.stopBroadcast() }
 
     private fun dispatch(context: Context, action: (IAuracastBroadcastService) -> Unit) {
-        if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "Shizuku not available or permission not granted; skipping broadcast call")
+        if (Shizuku.pingBinder()) {
+            dispatchWithBinder(context, action)
+            return
+        }
+
+        // No dialog, no notification — just wait for the binder in the
+        // background and run the call once it's up.
+        Shizuku.addBinderReceivedListenerSticky(object : Shizuku.OnBinderReceivedListener {
+            override fun onBinderReceived() {
+                Shizuku.removeBinderReceivedListener(this)
+                dispatchWithBinder(context, action)
+            }
+        })
+    }
+
+    private fun dispatchWithBinder(context: Context, action: (IAuracastBroadcastService) -> Unit) {
+        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Shizuku permission not granted; skipping broadcast call")
             return
         }
 
