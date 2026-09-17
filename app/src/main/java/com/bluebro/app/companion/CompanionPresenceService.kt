@@ -3,12 +3,12 @@ package com.bluebro.app.companion
 import android.companion.CompanionDeviceService
 import android.companion.DevicePresenceEvent
 import android.util.Log
+import com.bluebro.app.shizuku.AuracastBroadcastController
 
 /**
  * Bound by the system whenever Device A (the associated companion device)
- * enters or leaves BLE range. Wiring the Auracast broadcast toggle through
- * Shizuku is deliberately deferred until presence events are confirmed to
- * fire reliably on-device.
+ * enters or leaves BLE range. Toggles the Auracast broadcast through the
+ * Shizuku-privileged [AuracastBroadcastController].
  */
 class CompanionPresenceService : CompanionDeviceService() {
 
@@ -23,12 +23,12 @@ class CompanionPresenceService : CompanionDeviceService() {
         when (event.event) {
             DevicePresenceEvent.EVENT_BLE_APPEARED -> {
                 Log.d(TAG, "Device A appeared (association #${event.associationId})")
-                // TODO: startBroadcastViaShizuku() once presence is verified.
+                AuracastBroadcastController.startBroadcast(applicationContext)
             }
 
             DevicePresenceEvent.EVENT_BLE_DISAPPEARED -> {
                 Log.d(TAG, "Device A disappeared (association #${event.associationId})")
-                // TODO: stopBroadcastViaShizuku() once presence is verified.
+                AuracastBroadcastController.stopBroadcast(applicationContext)
             }
 
             else -> Log.d(

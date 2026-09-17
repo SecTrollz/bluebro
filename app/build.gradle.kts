@@ -5,13 +5,14 @@ plugins {
 
 android {
     namespace = "com.bluebro.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bluebro.app"
-        // DevicePresenceEvent / CompanionDeviceService#onDevicePresenceEvent requires API 34.
-        minSdk = 34
-        targetSdk = 35
+        // DevicePresenceEvent / CompanionDeviceService#onDevicePresenceEvent requires API 36
+        // (confirmed by compiling against the android-36 SDK stubs; it is absent from android-35).
+        minSdk = 36
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1"
     }
@@ -34,6 +35,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        aidl = true
+    }
 }
 
 dependencies {
@@ -41,4 +46,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-ktx:1.9.2")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }

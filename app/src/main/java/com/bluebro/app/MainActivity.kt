@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.bluebro.app.companion.CompanionDeviceStore
+import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,6 +34,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private val shizukuPermissionListener =
+        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+            if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
+                val granted = grantResult == PackageManager.PERMISSION_GRANTED
+                Log.d(TAG, "Shizuku permission ${if (granted) "granted" else "denied"}")
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -44,9 +53,27 @@ class MainActivity : AppCompatActivity() {
             requestBluetoothPermissionThenAssociate()
         }
 
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        requestShizukuPermissionIfNeeded()
+
         val existingAssociationId = CompanionDeviceStore.getAssociationId(this)
         if (existingAssociationId != CompanionDeviceStore.NO_ASSOCIATION) {
             statusText.text = getString(R.string.status_already_watching, existingAssociationId)
+        }
+    }
+
+    override fun onDestroy() {
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+        super.onDestroy()
+    }
+
+    private fun requestShizukuPermissionIfNeeded() {
+        if (!Shizuku.pingBinder()) {
+            Log.w(TAG, "Shizuku is not running; the Auracast broadcast toggle will be skipped")
+            return
+        }
+        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
         }
     }
 
@@ -95,5 +122,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "Bluebro"
+        private const val SHIZUKU_PERMISSION_REQUEST_CODE = 1001
     }
 }
